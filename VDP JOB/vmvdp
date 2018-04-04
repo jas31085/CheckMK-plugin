@@ -1,0 +1,44 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+#
+# (c) 2018, Edoardo Marchetti <marchetti.edoardo@gmail.com>
+# https://github.com/jas31085/Libra_310-Script-Collection
+#
+# Example output from agent:
+# <<<vmvdp>>>
+# 0 prod01 - OK: Completed transferred 1.1 % of 18.0 GB in 52 s, last_run: 2013-01-01-20:40
+# 0 data - OK: Completed transferred 0 % of 12.0 GB in 32 s, last_run: 2015-12-01-20:16
+# 0 prod02 - OK: Completed transferred 0.1 % of 29.0 GB in 90 s, last_run: 2015-07-01-20:37
+
+# inventory
+def inventory_vdp(checkname, info):
+    inventory = []
+    for line in info:
+            vm = line[1]
+            inventory.append( (vm, None) )
+    return inventory
+
+
+# check
+def check_vdp(item, param, info):
+    for line in info:
+        perfdata = []
+        if line[1] == item:
+            name = line[1]
+            status = line[4]
+            transferred = line[6]
+            transferred_all = line[9]
+            exec_time = line[12]
+            last_run = line[15]
+            infotext = "%s (Copiato: %s perc di: %s GB in %s s, Eseguito %s)" % (status, transferred, transferred_all, exec_time, last_run)
+            if line[0] == "0":
+                perfdata.append( ( "transferred", int(round(float(line[6]))) ) )
+                perfdata.append( ( "exec_time", int(line[12]) ) )
+                return (0, "OK - status is " + infotext, perfdata)
+            else:
+                return (2, "CRITICAL - status is " + infotext, perfdata)
+    return (3, "UNKNOWN - VDP %s not found in agent output" % item) 
+
+# declare the check to Check_MK
+check_info['vmvdp'] = \
+        (check_vdp, "VDP %s", 1, inventory_vdp)

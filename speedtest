@@ -1,0 +1,31 @@
+#! /bin/bash
+
+# Speedtest for Check_mk or nagios 
+#
+# Install speedtest-cli pkg
+# 
+# (c) 2018, Edoardo Marchetti <marchetti.edoardo@gmail.com>
+# https://github.com/jas31085/Libra_310-Script-Collection
+#
+
+# -----------------------------------------------------------------------
+# -----------------------------------------------------------------------
+
+
+if type speedtest-cli > /dev/null 2>&1 ; then
+  LOGFILE="$(mktemp "/tmp/speedtest.XXXXXXXX")"
+  speedtest-cli --csv > "$LOGFILE"
+  CSV=$(cat "$LOGFILE")
+  IFS=, VALUES=($CSV)
+  PING=${VALUES[5]}
+  DOWNLOAD=${VALUES[6]}
+  UPLOAD=${VALUES[7]}
+  
+  DOWNLOAD="$(numfmt --to=iec-i --suffix=B <<< $DOWNLOAD)"
+  UPLOAD="$(numfmt --to=iec-i --suffix=B <<< $UPLOAD)"
+
+  echo "<<<local>>>"
+  echo "0 SPEEDTEST ping=$PING;;|upload=$UPLOAD;;|download=$DOWNLOAD;; ping $PING upload $UPLOAD download $DOWNLOAD "
+fi
+
+rm -rf "$LOGFILE"
