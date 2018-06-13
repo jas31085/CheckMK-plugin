@@ -1,0 +1,47 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# (c) 2018, Edoardo Marchetti <marchetti.edoardo@gmail.com>
+# https://github.com/jas31085
+#
+
+# Example output from agent:
+# <<<systemctl>>>
+# 0 systemctl-sshd - OK: sshd is running - sshd is enabled
+# 2 systemctl-elasticserch - ERROR: elasticserch is unknown
+# 1 systemctl-logstash - OK: logstash is running - logstash is disabled
+
+
+# inventory
+def inventory_serv(checkname, info):
+    inventory = []
+    for line in info:
+            service = line[1]
+            inventory.append( (service, None) )
+    return inventory
+
+# check
+def check_services(item, param, info):
+    for line in info:
+        perfdata = []
+        if line[1] == item:
+
+            service = line[4].upper()
+            status = line[6].upper()
+
+            if line[0] == "0":
+                enabled = line[10].upper()
+                infotext = "Service %s is %s ( and %s )" % (service, status, enabled)
+                return (0, "OK - " + infotext, perfdata)
+            elif line[0] == "1":
+                enabled = line[10].upper()
+                infotext = "Service %s is %s ( and %s )" % (service, status, enabled)
+                return (1, "Warning -  " + infotext, perfdata)
+            elif line[0] == "2":
+                infotext = "Service %s is %s " % (service, status)
+                return (2, "CRITICAL -  " + infotext, perfdata)
+    return (3, "UNKNOWN - systemctl %s not found in agent output" % item) 
+
+# declare the check to Check_MK
+check_info['systemctl'] = \
+        (check_services, "%s", 1, inventory_serv)
