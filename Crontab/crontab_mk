@@ -1,123 +1,38 @@
-#! /bin/bash
+#!/bin/bash
 
-# Crontab list for Check_mk or nagios 
-#
-# list of system crontab only in /var/spool
-# 
-# (c) 2018, Edoardo Marchetti <marchetti.edoardo@gmail.com>
-# https://github.com/jas31085/CheckMK-plugin
-#
-
-# -----------------------------------------------------------------------
-# -----------------------------------------------------------------------
-
-function Find_command() {
-
-	declare -a JobLine
-	Ncommand=$(($(awk -F ";" '{print NF-1}' <<< "$2") + 1))
-			# JobLine["$i"]="awk -v pos=$i -F ";" '{print ${pos}}' <<< "$2""
-		for (( i = 1; i <= "$Ncommand"; i++ )); do
-            JobLine[$i]="$(awk -v pos=$i 'BEGIN { FS=";" } {print $pos}' <<< "$2")"
-            JobLine[$i]="$(echo ${JobLine[$i]} | awk -F ">" '{print $1}')"
-            JobLine[$i]="$(echo ${JobLine[$i]} | awk -F "/" '{print $NF}')"
-        done    
-
-        COMMAND="$(echo ${JobLine[*]} | xargs)"
-
-	eval $1=\$COMMAND
-}
-
-
-function Old_jobs() {
-
-	EXITCODE="$1"
-	# USER="$2"
-	# file="$3"
-
-	New_md5=$(md5sum "$3" | awk '{print $1}')
-
-	if [[ -e "/tmp/$2" ]]; then
-		Old_md5="$(cat /tmp/$2)"
-	else
-		$(touch "/tmp/$2")
-	fi
-
-	if [ "$Old_md5" != "$New_md5" ] ; then
-		EXITCODE="2"
-    	$(md5sum "$3" | awk '{print $1}' > /tmp/$2)
-    	else
-    	EXITCODE="0"
-  	fi
-
-	eval "$1=$EXITCODE"
-}
-
-
-
-############################################################
-
-# 		MAIN
-
-############################################################
-
-while [[ -n "$1" ]]; do
-  case $1 in
-    --help | -h | *)
-      sed -n '2,9p' "$0" | tr -d '#'
-      exit 3
-      ;;
-  esac
-  shift
-done
+EXITCODE=0;
 
 # info distro linux
+
 if [[ -f /etc/os-release ]]; then
-	OS=$(cat /etc/os-release | grep -i "^id=" | sed 's/ID=//' | sed 's/\"//g')
+	OS="$(cat /etc/os-release | grep -i "^id=" | sed 's/ID=//' | sed 's/\"//g')";
 fi
 
 # crontab dir for distro linux
 if [[ $OS == "debian" ]]; then
-	CRON_FILE="/var/spool/cron/crontabs/*"
+	VAR_CRON_FILES="/var/spool/cron/crontabs/*";
 	elif [[ $OS == "centos" ]]; then
-	 	CRON_FILE="/var/spool/cron/*"
+	 	VAR_CRON_FILES="/var/spool/cron/*";
 fi
 
-EXITCODE=0
-echo "<<<crontab>>>"
+CRON_FILES="$(find /etc/cron* ${VAR_CRON_FILES} -type f)";
 
-# job per user
-for f in $CRON_FILE
-do
-	# User per Crontab
-	USER=$(echo $f | awk -F "/" '{print $NF}')
+echo "<<<crontab_list>>>";
 
-	# if file are modified
-	Old_jobs EXITCODE "$USER" "$f"
-
-	# Read User File For Jobs 
-	COUNTER=1
-
+while read -r CRON_FILE; do
+	lastModified="$(stat "${CRON_FILE}" | grep "Modify: " | sed -e 's/Modify: //g')"
+	date="$(echo $lastModified | awk '{print $1}')"
+	time="$(echo $lastModified | awk '{print $2}')"
+	tzinfo="CEST"
+	rows="$(cat "${CRON_FILE}" | grep -v ^\# | grep -v ^$ | grep ^[0-9\*] | wc -l)"
+	# if [[ ${rows} -gt 0 ]]; then
+		echo "#${CRON_FILE};${date} ${time::15} ${tzinfo};${rows}"
+	# fi
 	while read line; do
-		
-		FULL_COMMAND="$(echo "$line"| grep -v "#" | grep -v "^[A-Z]" |cut -d " " -f 6-)"
-
-		# If There is some job print
-		if [[ -n "$FULL_COMMAND" ]]; then
-			# list of command
-			Find_command COMMAND "$FULL_COMMAND"
-
-			# parsing Exec Time
-			MINUTE="$(echo "$line" | grep -v "#" | grep -v "^[A-Z]" | awk '{print $1}')"
-			HOUR="$(echo "$line" | grep -v "#" | grep -v "^[A-Z]" | awk '{print $2}')"
-			Day_of_MONTH="$(echo "$line" | grep -v "#" | grep -v "^[A-Z]" | awk '{print $3}')"
-			MONTH="$(echo "$line" | grep -v "#" | grep -v "^[A-Z]" | awk '{print $4}')"
-			Day_Of_Week="$(echo "$line" | grep -v "#" | grep -v "^[A-Z]" | awk '{print $5}')"
-
-			# user  command m h dom mon dow 
-		 	echo $EXITCODE" Crontab-"$USER"-"$COUNTER" - User: "$USER" - m: "$MINUTE" - H: "$HOUR" - DoM: "$Day_of_MONTH" - M: "$MONTH" - DoW: "$Day_Of_Week" - Command: "$COMMAND" - Full_Command: "$FULL_COMMAND
-			COUNTER=$[$COUNTER +1]	 
-
+		if [[ ! -z "${line}" ]]; then
+			echo "${line}";
 		fi
-	done <$f	
-done
+	done <<<"$(cat "${CRON_FILE}" | grep -v ^\# | grep -v ^$ | grep ^[0-9\*])"
+done <<<"${CRON_FILES}"
 
+# | awk 'BEGIN {FS="."}{print $1}'

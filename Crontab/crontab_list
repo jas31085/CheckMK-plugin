@@ -1,0 +1,64 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+#
+# 3/2018 Edoardo Marchetti
+#
+
+# Example output from agent:
+# <<<crontab>>>
+# #/var/spool/cron/rancid;2018-06-18 16:58:20
+# 0 5 */3 * * /usr/local/rancid/bin/rancid-run
+# #/var/spool/cron/root;2018-03-28 11:10:53
+# */5 * * * * /root/SvuotaQueue.sh   >/dev/null 2>&1
+# 5 3 * * 0 ansible-playbook /etc/ansible/roles/005_copia_log.yaml
+from datetime import datetime, timedelta
+import time
+import re
+
+# inventory
+def inventory_cront(checkname, info):
+    inventory = []
+    inventory.append( ("Crontab_list", None) )
+    return inventory
+
+# check
+def check_cron(item, param, info):
+    output = []
+    perfdata = []
+    errCode = files = rows = 0
+    formatDate = "%Y-%m-%d %H:%M:%S.%f %Z"
+    # delta = datetime.strptime("00:05:00", "%H:%M:%S")
+    delta = timedelta(minutes=5)
+    now = datetime.now()
+
+    for line in info:
+        myLine = ' '.join(line)
+
+        if myLine[0] == '#':
+            files += 1
+            fileName = myLine.split(';')[0][1:]
+            fileRow = int(myLine.split(';')[2])
+            modifiedDate = datetime.strptime(myLine.split(';')[1], formatDate)
+            diff_time = now - modifiedDate
+
+            if diff_time < delta:
+                errCode = 2
+                output.append("--> %s:" % fileName)
+            else:
+                if fileRow != 0:
+                    output.append("%s:" % fileName)
+        else:
+            if fileRow != 0:
+                rows +=1
+                output.append(myLine)
+
+    output.insert(0, "Found %d crontab for a total of %d lines" % (files, rows))
+
+    return errCode, '<br>'.join(output)
+
+
+# declare the check to Check_MK
+check_info['crontab_list'] = \
+        (check_cron, "%s", 1, inventory_cront)
+
