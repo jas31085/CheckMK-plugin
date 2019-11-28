@@ -9,12 +9,32 @@
 #
 
 # -----------------------------------------------------------------------
+# Modified by: Mike Hanby
+# Email: mhanby@uab.edu
+# 
+# The 'speedtest-cli' command comes from https://github.com/sivel/speedtest-cli
+#
+# Modifications from the original are as follows:
+#   I didn't want to run the 'speedtest-cli' Python script as root, so I
+#   modified it to run as a user named 'cmkplugin' (which has to be
+#   manually created on the host). The user doesn't need any special privileges.
+# 
+#  If the script is run as a user other than root, it will continue to run
+#  as that user (for testing from the command line)
 # -----------------------------------------------------------------------
 
 
 if type speedtest-cli > /dev/null 2>&1 ; then
   LOGFILE="$(mktemp "/tmp/speedtest.XXXXXXXX")"
-  speedtest-cli --csv > "$LOGFILE"
+
+  if [ "$EUID" -ne 0 ]; then
+    speedtest-cli --csv > "$LOGFILE"
+  else
+    chown cmkplugin $LOGFILE
+    chmod 660 $LOGFILE
+    su - cmkplugin -c "/usr/bin/speedtest-cli --csv > $LOGFILE"
+  fi
+
   CSV=$(cat "$LOGFILE")
   IFS=, VALUES=($CSV)
   PING=${VALUES[5]}
@@ -25,7 +45,7 @@ if type speedtest-cli > /dev/null 2>&1 ; then
   UPLOAD="$(numfmt --to=iec-i --suffix=B <<< $UPLOAD)"
 
   echo "<<<local>>>"
-  echo "0 SPEEDTEST ping=$PING;;|upload=$UPLOAD;;|download=$DOWNLOAD;; ping $PING upload $UPLOAD download $DOWNLOAD "
+  echo "0 speedtest ping=$PING;;|upload=$UPLOAD;;|download=$DOWNLOAD;; ping $PING upload $UPLOAD download $DOWNLOAD "
 fi
 
 rm -rf "$LOGFILE"
